@@ -1,0 +1,149 @@
+/* b2b.css */
+
+/* --- Layout & Headers --- */
+.b2b-header-actions {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.search-bar-flex {
+  flex: 1;
+}
+
+.btn-primary {
+  background-color: var(--brand-purple);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 30px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.2s;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+}
+
+/* --- Data Tables & Cards --- */
+.b2b-card {
+  background: var(--surface-white);
+  border-radius: 24px;
+  padding: 24px;
+  margin-top: 24px;
+}
+
+.b2b-table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.b2b-table-title {
+  margin: 0;
+  font-size: 18px;
+}
+
+.btn-filter {
+  background: transparent;
+  border: none;
+  color: var(--text-gray);
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.b2b-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.b2b-table th {
+  text-align: left;
+  padding: 12px;
+  color: var(--text-gray);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.b2b-table td {
+  padding: 16px 12px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+/* --- Table Rows & Typography --- */
+.b2b-client-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.b2b-client-name {
+  font-weight: 800;
+}
+
+.b2b-client-subtext {
+  font-size: 12px;
+  color: var(--text-gray);
+  font-weight: 500;
+}
+
+/* --- Badges & Status Indicators --- */
+.badge {
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.badge-enterprise {
+  background: var(--brand-purple-light);
+  color: var(--brand-purple);
+}
+
+.badge-startup {
+  background: #E2E8F0;
+  color: #475569;
+}
+
+.b2b-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-active { color: #047857; }
+.status-active .status-dot { background-color: #047857; }
+
+.status-onboarding { color: #D97706; }
+.status-onboarding .status-dot { background-color: #D97706; }
+
+/* --- Table Buttons --- */
+.btn-action {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--brand-purple);
+  font-weight: bold;
+  transition: 0.2s;
+}
+
+.btn-action:hover {
+  background: var(--brand-purple-light);
+}

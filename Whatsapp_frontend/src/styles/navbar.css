@@ -1,0 +1,56 @@
+.dashboard-header {
+    background: var(--surface-white);
+}
+
+.header-tab {
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-gray);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.header-tab.active {
+    background: var(--brand-purple-light);
+    color: var(--brand-purple);
+}
+
+.header-tab:hover:not(.active) {
+    background: var(--bg-main);
+    color: var(--text-dark);
+}
+
+.theme-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px;
+    border-radius: 999px;
+    background: var(--bg-main);
+}
+
+.theme-btn {
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-gray);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.theme-btn:hover {
+    color: var(--text-dark);
+}
+
+.theme-btn.active {
+    background: var(--surface-white);
+    color: var(--brand-purple);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
