@@ -1,9 +1,62 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import '../styles/b2b_view.css';
+import { getActiveCompanies, getApiErrorMessage } from '../api';
+import Toast from '../components/Toast';
 
 const B2BView = () => {
+    const [companies, setCompanies] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [toast, setToast] = useState(null);
+
+    useEffect(() => {
+        const loadCompanies = async () => {
+            try {
+                setLoading(true);
+                const data = await getActiveCompanies();
+                setCompanies(data);
+                setError(null);
+            } catch (err) {
+                const errorMsg = getApiErrorMessage(err, 'Failed to load companies');
+                setError(errorMsg);
+                setToast({ type: 'error', message: errorMsg });
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadCompanies();
+    }, []);
+
+    // Calculate stats from companies data
+    const stats = {
+        activeClients: companies.filter(c => c.status === 'ACTIVE').length,
+        enterpriseAccounts: Math.floor(companies.length * 0.3), // Placeholder
+        pendingProposals: Math.floor(companies.length * 0.1)  // Placeholder
+    };
+
     return (
         <main className="main-content">
+            {/* Toast Notification */}
+            {toast && (
+                <Toast 
+                    message={toast.message} 
+                    type={toast.type}
+                    onClose={() => setToast(null)}
+                />
+            )}
+
+            {/* Loading State */}
+            {loading ? (
+                <div style={{ textAlign: 'center', padding: '60px 24px' }}>
+                    <h3>Loading B2B data...</h3>
+                </div>
+            ) : error ? (
+                <div style={{ textAlign: 'center', padding: '60px 24px', color: 'var(--text-error)' }}>
+                    <h3>Error loading B2B data</h3>
+                    <p>{error}</p>
+                </div>
+            ) : (
+            <>
             {/* Search & Action Bar */}
             <div style={{ display: 'flex', gap: '16px' }}>
                 <div className="search-bar" style={{ flex: 1 }}>
@@ -21,21 +74,21 @@ const B2BView = () => {
                     <div className="stat-icon">🏢</div>
                     <div>
                         <div style={{ fontSize: '12px', color: 'var(--text-gray)' }}>Active B2B Clients</div>
-                        <div style={{ fontWeight: '800', fontSize: '18px' }}>124</div>
+                        <div style={{ fontWeight: '800', fontSize: '18px' }}>{stats.activeClients}</div>
                     </div>
                 </div>
                 <div className="stat-pill">
                     <div className="stat-icon">⭐</div>
                     <div>
                         <div style={{ fontSize: '12px', color: 'var(--text-gray)' }}>Enterprise Accounts</div>
-                        <div style={{ fontWeight: '800', fontSize: '18px' }}>38</div>
+                        <div style={{ fontWeight: '800', fontSize: '18px' }}>{stats.enterpriseAccounts}</div>
                     </div>
                 </div>
                 <div className="stat-pill">
                     <div className="stat-icon">📄</div>
                     <div>
                         <div style={{ fontSize: '12px', color: 'var(--text-gray)' }}>Pending Proposals</div>
-                        <div style={{ fontWeight: '800', fontSize: '18px' }}>12</div>
+                        <div style={{ fontWeight: '800', fontSize: '18px' }}>{stats.pendingProposals}</div>
                     </div>
                 </div>
             </div>
@@ -120,6 +173,8 @@ const B2BView = () => {
                     </tbody>
                 </table>
             </div>
+            </>
+            )}
         </main>
     );
 };

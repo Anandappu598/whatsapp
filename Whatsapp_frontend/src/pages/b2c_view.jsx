@@ -1,9 +1,67 @@
-import React from 'react';
-import '../styles/b2c_view.css'; // Import the new flexbox CSS
+import React, { useState, useEffect } from 'react';
+import '../styles/b2c_view.css';
+import { getCourses, getEnrollments, getApiErrorMessage } from '../api';
+import Toast from '../components/Toast';
 
 const B2CView = () => {
+    const [courses, setCourses] = useState([]);
+    const [enrollments, setEnrollments] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [toast, setToast] = useState(null);
+
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                setLoading(true);
+                const [coursesData, enrollmentsData] = await Promise.all([
+                    getCourses(),
+                    getEnrollments()
+                ]);
+                setCourses(coursesData);
+                setEnrollments(enrollmentsData);
+                setError(null);
+            } catch (err) {
+                const errorMsg = getApiErrorMessage(err, 'Failed to load courses');
+                setError(errorMsg);
+                setToast({ type: 'error', message: errorMsg });
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadData();
+    }, []);
+
+    // Calculate stats from data
+    const stats = {
+        activeStudents: enrollments.filter(e => e.status !== 'DROPPED').length,
+        hoursWatched: Math.floor(enrollments.length * 45), // Placeholder calculation
+        avgCompletion: Math.round(enrollments.reduce((sum, e) => sum + e.completion_percentage, 0) / (enrollments.length || 1))
+    };
+
     return (
         <main className="main-content">
+            {/* Toast Notification */}
+            {toast && (
+                <Toast 
+                    message={toast.message} 
+                    type={toast.type}
+                    onClose={() => setToast(null)}
+                />
+            )}
+
+            {/* Loading State */}
+            {loading ? (
+                <div style={{ textAlign: 'center', padding: '60px 24px' }}>
+                    <h3>Loading B2C data...</h3>
+                </div>
+            ) : error ? (
+                <div style={{ textAlign: 'center', padding: '60px 24px', color: 'var(--text-error)' }}>
+                    <h3>Error loading B2C data</h3>
+                    <p>{error}</p>
+                </div>
+            ) : (
+            <>
             {/* Search & Action Bar */}
             <div className="b2c-header-actions">
                 <div className="search-bar search-bar-flex">
@@ -21,21 +79,21 @@ const B2CView = () => {
                     <div className="stat-icon" style={{ background: 'var(--surface-soft)', color: 'var(--brand-purple)' }}>🎓</div>
                     <div>
                         <div style={{ fontSize: '12px', color: 'var(--text-gray)' }}>Active Students</div>
-                        <div style={{ fontWeight: '800', fontSize: '18px' }}>2,450</div>
+                        <div style={{ fontWeight: '800', fontSize: '18px' }}>{stats.activeStudents}</div>
                     </div>
                 </div>
                 <div className="stat-pill">
                     <div className="stat-icon" style={{ background: 'var(--brand-purple-light)', color: 'var(--brand-purple)' }}>⏱️</div>
                     <div>
                         <div style={{ fontSize: '12px', color: 'var(--text-gray)' }}>Hours Watched</div>
-                        <div style={{ fontWeight: '800', fontSize: '18px' }}>14,200</div>
+                        <div style={{ fontWeight: '800', fontSize: '18px' }}>{stats.hoursWatched}</div>
                     </div>
                 </div>
                 <div className="stat-pill">
                     <div className="stat-icon" style={{ background: 'var(--surface-soft)', color: '#10B981' }}>🏆</div>
                     <div>
                         <div style={{ fontSize: '12px', color: 'var(--text-gray)' }}>Avg. Completion</div>
-                        <div style={{ fontWeight: '800', fontSize: '18px' }}>68%</div>
+                        <div style={{ fontWeight: '800', fontSize: '18px' }}>{stats.avgCompletion}%</div>
                     </div>
                 </div>
             </div>
@@ -116,6 +174,8 @@ const B2CView = () => {
                 </div>
 
             </div>
+            </>
+            )}
         </main>
     );
 };

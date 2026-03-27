@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import '../styles/create_template.css';
+import { createTemplate, getApiErrorMessage } from '../api';
+import { ToastContext } from '../context/ToastContext';
 
 const CreateTemplate = ({ onAddTemplate, onCancel }) => {
     // State for the template data
@@ -8,6 +10,8 @@ const CreateTemplate = ({ onAddTemplate, onCancel }) => {
     const [bodyText, setBodyText] = useState('Hello {{1}}, welcome to Merida! We are thrilled to have you.');
     const [footerText, setFooterText] = useState('Reply STOP to opt out.');
     const [buttonText, setButtonText] = useState('Visit Website');
+    const [loading, setLoading] = useState(false);
+    const { showError, showSuccess } = useContext(ToastContext);
 
     // Function to insert a variable {{1}}, {{2}}, etc. into the text area
     const addVariable = () => {
@@ -17,18 +21,36 @@ const CreateTemplate = ({ onAddTemplate, onCancel }) => {
         setBodyText(bodyText + ` {{${nextNum}}}`);
     };
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         if (!templateName) {
-            alert('Please enter a template name');
+            showError('Please enter a template name');
             return;
         }
-        onAddTemplate({
-            name: templateName,
-            category: category,
-            body: bodyText,
-            footer: footerText,
-            button: buttonText
-        });
+
+        setLoading(true);
+        try {
+            const templatePayload = {
+                name: templateName,
+                category: category,
+                body: bodyText,
+                status: 'DRAFT'
+            };
+
+            const response = await createTemplate(templatePayload);
+            showSuccess('Template created successfully and sent for approval!');
+            
+            // Call the callback to update parent component
+            onAddTemplate({
+                ...response,
+                footer: footerText,
+                button: buttonText
+            });
+        } catch (err) {
+            const errorMsg = getApiErrorMessage(err, 'Failed to create template');
+            showError(errorMsg);
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -42,11 +64,26 @@ const CreateTemplate = ({ onAddTemplate, onCancel }) => {
                 <div style={{ display: 'flex', gap: '12px' }}>
                     <button
                         onClick={onCancel}
-                        style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-gray)', padding: '10px 20px', borderRadius: '30px', fontWeight: 'bold', cursor: 'pointer' }}
+                        disabled={loading}
+                        style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-gray)', padding: '10px 20px', borderRadius: '30px', fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1 }}
                     >
                         Cancel
                     </button>
-                    <button className="btn-primary" onClick={handleSubmit}>Submit for Approval</button>
+                    <button 
+                        className="btn-primary" 
+                        onClick={handleSubmit}
+                        disabled={loading}
+                        style={{ opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
+                    >
+                        {loading ? (
+                            <>
+                                <span className="spinner" style={{ marginRight: '8px' }}></span>
+                                Submitting...
+                            </>
+                        ) : (
+                            'Create Template'
+                        )}
+                    </button>
                 </div>
             </div>
 

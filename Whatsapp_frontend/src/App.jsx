@@ -148,6 +148,16 @@ function AppContent() {
     };
   }, [themeMode]);
 
+  // Listen for logout event from API interceptor (when token refresh fails)
+  useEffect(() => {
+    const handleLogoutEvent = () => {
+      handleLogout();
+    };
+
+    window.addEventListener('logout', handleLogoutEvent);
+    return () => window.removeEventListener('logout', handleLogoutEvent);
+  }, []);
+
   // Show Dashboard if authenticated or authStep is dashboard
   if (isAuthenticated || authStep === 'dashboard') {
     return (

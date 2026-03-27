@@ -1,7 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import '../styles/templates_view.css';
+import { getTemplates, getApprovedTemplates, createCampaign, getContacts, getB2CContacts, getB2BContacts, getApiErrorMessage } from '../api';
+import Toast from '../components/Toast';
 
-const TemplatesView = ({ templates, onCreateClick, onLaunch }) => {
+const TemplatesView = ({ onCreateClick, onLaunch }) => {
+    const [templates, setTemplates] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [toast, setToast] = useState(null);
     const [activeTab, setActiveTab] = useState('All');
     const [activeStatus, setActiveStatus] = useState('All');
 
@@ -24,24 +30,46 @@ const TemplatesView = ({ templates, onCreateClick, onLaunch }) => {
         setSelectedContacts(new Set());
     };
 
-    // --- Dummy Data ---
+    // --- Fetch Templates & Contacts from Backend ---
+    const [b2bContacts, setB2BContacts] = useState([]);
+    const [b2cContacts, setB2CContacts] = useState([]);
+
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                setLoading(true);
+                const [templatesRes, b2bRes, b2cRes] = await Promise.all([
+                    getTemplates(),
+                    getB2BContacts(),
+                    getB2CContacts()
+                ]);
+                
+                setTemplates(templatesRes);
+                setB2BContacts(b2bRes);
+                setB2CContacts(b2cRes);
+                setError(null);
+            } catch (err) {
+                const errorMsg = getApiErrorMessage(err, 'Failed to load templates');
+                setError(errorMsg);
+                setToast({ type: 'error', message: errorMsg });
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadData();
+    }, []);
+
+    // --- Dummy Data (Fallback) ---
     const COURSES = ['Front-End Developer', 'UI/UX Design', 'Data Science', 'Full-Stack BootCamp'];
 
-    const B2B_CONTACTS = [
+    const B2B_CONTACTS = b2bContacts.length > 0 ? b2bContacts : [
         { id: 101, name: 'Alice Johnson', phone: '+1 234 567 8901', company: 'TechCorp Inc.' },
         { id: 102, name: 'Bob Smith', phone: '+1 345 678 9012', company: 'Global Logistics' },
-        { id: 103, name: 'Charlie Brown', phone: '+1 456 789 0123', company: 'Merida Solutions' },
-        { id: 104, name: 'Diana Prince', phone: '+1 567 890 1234', company: 'TechCorp Inc.' },
-        { id: 105, name: 'Edward Norton', phone: '+1 678 901 2345', company: 'Global Logistics' },
     ];
 
-    const B2C_CONTACTS = [
+    const B2C_CONTACTS = b2cContacts.length > 0 ? b2cContacts : [
         { id: 201, name: 'John Doe', phone: '+1 111 222 3333', course: 'Front-End Developer' },
         { id: 202, name: 'Jane Roe', phone: '+1 222 333 4444', course: 'UI/UX Design' },
-        { id: 203, name: 'Jim Bean', phone: '+1 333 444 5555', course: 'Data Science' },
-        { id: 204, name: 'Jill Hill', phone: '+1 444 555 6666', course: 'Full-Stack BootCamp' },
-        { id: 205, name: 'Jack Black', phone: '+1 555 666 7777', course: 'Front-End Developer' },
-        { id: 206, name: 'Jenny Penny', phone: '+1 666 777 8888', course: 'UI/UX Design' },
     ];
 
     // --- Modal Logic ---
@@ -65,30 +93,48 @@ const TemplatesView = ({ templates, onCreateClick, onLaunch }) => {
         setShowSuccess(false);
     };
 
-    const handleSend = () => {
-        const contactSource = audienceType === 'B2B' ? B2B_CONTACTS : B2C_CONTACTS;
-        const selectedContactObjects = contactSource.filter(c => selectedContacts.has(c.id));
+    const handleSend = async () => {
+        try {
+            const contactSource = audienceType === 'B2B' ? B2B_CONTACTS : B2C_CONTACTS;
+            const selectedContactIds = Array.from(selectedContacts);
+            const selectedContactObjects = contactSource.filter(c => selectedContacts.has(c.id));
 
-        const contactsSummary = selectedContactObjects.map(c => ({
-            name: c.name,
-            company: c.company || (audienceType === 'B2C' ? 'Student' : 'N/A'),
-            phone: c.phone,
-            status: ['Delivered', 'Read', 'Failed'][Math.floor(Math.random() * 3)]
-        }));
+            // Create campaign via API
+            const campaignPayload = {
+                name: campaignName,
+                template: selectedTemplate.id,
+                audience_type: audienceType,
+                status: 'DRAFT',
+                contacts: selectedContactIds
+            };
 
-        if (onLaunch) onLaunch(
-            selectedContacts.size,
-            audienceType,
-            campaignName,
-            selectedTemplate?.name,
-            selectedTemplate?.body,
-            contactsSummary
-        );
+            await createCampaign(campaignPayload);
 
-        setShowSuccess(true);
-        setTimeout(() => {
-            closeSendModal();
-        }, 2200);
+            const contactsSummary = selectedContactObjects.map(c => ({
+                name: c.name,
+                company: c.company || (audienceType === 'B2C' ? 'Student' : 'N/A'),
+                phone: c.phone,
+                status: ['Delivered', 'Read', 'Failed'][Math.floor(Math.random() * 3)]
+            }));
+
+            if (onLaunch) onLaunch(
+                selectedContacts.size,
+                audienceType,
+                campaignName,
+                selectedTemplate?.name,
+                selectedTemplate?.body,
+                contactsSummary
+            );
+
+            setToast({ type: 'success', message: 'Campaign created successfully!' });
+            setShowSuccess(true);
+            setTimeout(() => {
+                closeSendModal();
+            }, 2200);
+        } catch (err) {
+            const errorMsg = getApiErrorMessage(err, 'Failed to create campaign');
+            setToast({ type: 'error', message: errorMsg });
+        }
     };
 
     const toggleContact = (id) => {
@@ -153,6 +199,27 @@ const TemplatesView = ({ templates, onCreateClick, onLaunch }) => {
 
     return (
         <main className="main-content">
+            {/* Toast Notification */}
+            {toast && (
+                <Toast 
+                    message={toast.message} 
+                    type={toast.type}
+                    onClose={() => setToast(null)}
+                />
+            )}
+
+            {/* Loading State */}
+            {loading ? (
+                <div style={{ textAlign: 'center', padding: '60px 24px' }}>
+                    <h3>Loading templates...</h3>
+                </div>
+            ) : error ? (
+                <div style={{ textAlign: 'center', padding: '60px 24px', color: 'var(--text-error)' }}>
+                    <h3>Error loading templates</h3>
+                    <p>{error}</p>
+                </div>
+            ) : (
+            <>
 
             {/* Header Area */}
             <div className="templates-header-actions">
@@ -406,6 +473,8 @@ const TemplatesView = ({ templates, onCreateClick, onLaunch }) => {
                         </div>
                     </div>
                 </div>
+            )}
+            </>
             )}
         </main>
     );

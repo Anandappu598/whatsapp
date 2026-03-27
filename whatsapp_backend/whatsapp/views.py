@@ -6,8 +6,14 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
-from .serializers import (LoginSerializers, SignupWithOTPSerializer, VerifySignupOTPSerializer, ForgotPasswordSerializer, ResetPasswordSerializer, LogoutSerializer, UserPreferenceSerializer)
-from .models import User
+from .serializers import (
+    LoginSerializers, SignupWithOTPSerializer, VerifySignupOTPSerializer, 
+    ForgotPasswordSerializer, ResetPasswordSerializer, LogoutSerializer, UserPreferenceSerializer,
+    ContactSerializer, TemplateSerializer, CampaignListSerializer, CampaignDetailSerializer,
+    MessageSerializer, CourseSerializer, CompanySerializer, StudentEnrollmentSerializer,
+    CompanyContactSerializer, MessageTemplateSerializer
+)
+from .models import User, Contact, Template, Campaign, Message, Course, Company, StudentEnrollment, CompanyContact, MessageTemplate
 from .utils import (
     create_otp_record,
     send_signup_otp_to_admin,
@@ -201,3 +207,213 @@ class UserPreferencesViewSet(viewsets.GenericViewSet):
             "message": "Theme preference updated",
             "theme_preference": user.theme_preference
         })
+
+
+# Contact ViewSet
+class ContactViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing contacts"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = ContactSerializer
+    
+    def get_queryset(self):
+        return Contact.objects.filter(user=self.request.user)
+    
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+    
+    @action(detail=False, methods=['get'])
+    def b2b(self, request):
+        """Get all B2B contacts"""
+        contacts = self.get_queryset().filter(category='B2B')
+        serializer = self.get_serializer(contacts, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def b2c(self, request):
+        """Get all B2C contacts"""
+        contacts = self.get_queryset().filter(category='B2C')
+        serializer = self.get_serializer(contacts, many=True)
+        return Response(serializer.data)
+
+
+# Template ViewSet
+class TemplateViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing message templates"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = TemplateSerializer
+    
+    def get_queryset(self):
+        return Template.objects.filter(created_by=self.request.user)
+    
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+    
+    @action(detail=False, methods=['get'])
+    def approved(self, request):
+        """Get only approved templates"""
+        templates = self.get_queryset().filter(status='APPROVED')
+        serializer = self.get_serializer(templates, many=True)
+        return Response(serializer.data)
+
+
+# Campaign ViewSet
+class CampaignViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing campaigns"""
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        return Campaign.objects.filter(created_by=self.request.user)
+    
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return CampaignDetailSerializer
+        return CampaignListSerializer
+    
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+    
+    @action(detail=False, methods=['get'])
+    def running(self, request):
+        """Get all running campaigns"""
+        campaigns = self.get_queryset().filter(status='RUNNING')
+        serializer = self.get_serializer(campaigns, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def launch(self, request, pk=None):
+        """Launch a campaign"""
+        campaign = self.get_object()
+        if campaign.status != 'DRAFT':
+            return Response(
+                {"error": "Only draft campaigns can be launched"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        campaign.status = 'RUNNING'
+        campaign.save()
+        return Response({"message": "Campaign launched successfully", "status": campaign.status})
+    
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        """Mark a campaign as completed"""
+        campaign = self.get_object()
+        campaign.status = 'COMPLETED'
+        campaign.save()
+        return Response({"message": "Campaign completed", "status": campaign.status})
+
+
+# Message ViewSet
+class MessageViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing messages"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = MessageSerializer
+    
+    def get_queryset(self):
+        # Get all messages from contacts owned by the user
+        return Message.objects.filter(contact__user=self.request.user)
+    
+    @action(detail=False, methods=['get'])
+    def contact_messages(self, request):
+        """Get all messages for a specific contact"""
+        contact_id = request.query_params.get('contact_id')
+        if not contact_id:
+            return Response(
+                {"error": "contact_id parameter is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            contact = Contact.objects.get(id=contact_id, user=request.user)
+            messages = Message.objects.filter(contact=contact).order_by('created_at')
+            serializer = self.get_serializer(messages, many=True)
+            return Response(serializer.data)
+        except Contact.DoesNotExist:
+            return Response(
+                {"error": "Contact not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+# Course ViewSet
+class CourseViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing courses"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = CourseSerializer
+    
+    def get_queryset(self):
+        return Course.objects.all()
+
+
+# Company ViewSet
+class CompanyViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing B2B companies"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = CompanySerializer
+    
+    def get_queryset(self):
+        return Company.objects.all()
+    
+    @action(detail=False, methods=['get'])
+    def my_companies(self, request):
+        """Get companies managed by current user"""
+        companies = Company.objects.filter(account_manager=request.user)
+        serializer = self.get_serializer(companies, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def active(self, request):
+        """Get all active companies"""
+        companies = Company.objects.filter(status='ACTIVE')
+        serializer = self.get_serializer(companies, many=True)
+        return Response(serializer.data)
+
+
+# StudentEnrollment ViewSet
+class StudentEnrollmentViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing student course enrollments"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = StudentEnrollmentSerializer
+    
+    def get_queryset(self):
+        return StudentEnrollment.objects.filter(student__user=self.request.user)
+    
+    @action(detail=False, methods=['get'])
+    def course_students(self, request):
+        """Get all students enrolled in a course"""
+        course_id = request.query_params.get('course_id')
+        if not course_id:
+            return Response(
+                {"error": "course_id parameter is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            course = Course.objects.get(id=course_id)
+            enrollments = StudentEnrollment.objects.filter(course=course)
+            serializer = self.get_serializer(enrollments, many=True)
+            return Response(serializer.data)
+        except Course.DoesNotExist:
+            return Response(
+                {"error": "Course not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+# CompanyContact ViewSet
+class CompanyContactViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing company-contact relationships"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = CompanyContactSerializer
+    
+    def get_queryset(self):
+        return CompanyContact.objects.filter(contact__user=self.request.user)
+
+
+# MessageTemplate ViewSet
+class MessageTemplateViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing pre-built message templates"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = MessageTemplateSerializer
+    
+    def get_queryset(self):
+        return MessageTemplate.objects.filter(created_by=self.request.user)
+    
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)

@@ -10,6 +10,7 @@ const apiClient = axios.create({
   },
 });
 
+// Request interceptor - add token to headers
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('authToken');
   if (token) {
@@ -17,6 +18,57 @@ apiClient.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// Response interceptor - handle token refresh on 401
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    // If 401 and not already retried, try to refresh the token
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+
+      try {
+        const refreshToken = localStorage.getItem('refreshToken');
+        if (!refreshToken) {
+          // No refresh token, clear auth and dispatch logout event
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('refreshToken');
+          localStorage.removeItem('userEmail');
+          localStorage.removeItem('userRole');
+          // Dispatch custom event for app to handle logout
+          window.dispatchEvent(new Event('logout'));
+          return Promise.reject(error);
+        }
+
+        // Call token refresh endpoint
+        const response = await axios.post(
+          `${API_BASE_URL}/auth/token/refresh/`,
+          { refresh: refreshToken },
+          { timeout: 15000 }
+        );
+
+        const newAccessToken = response.data.access;
+        localStorage.setItem('authToken', newAccessToken);
+
+        // Retry original request with new token
+        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        return apiClient(originalRequest);
+      } catch (refreshError) {
+        // Refresh failed, clear auth and dispatch logout event
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('userEmail');
+        localStorage.removeItem('userRole');
+        window.dispatchEvent(new Event('logout'));
+        return Promise.reject(refreshError);
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 export const getApiErrorMessage = (error, fallback = 'Something went wrong') => {
   if (error?.response?.data?.error) return error.response.data.error;

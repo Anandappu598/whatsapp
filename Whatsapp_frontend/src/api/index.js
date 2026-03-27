@@ -1,3 +1,12 @@
 export * from './authApi';
 export * from './userApi';
+export * from './contactsApi';
+export * from './templatesApi';
+export * from './campaignsApi';
+export * from './messagesApi';
+export * from './coursesApi';
+export * from './companiesApi';
+export * from './enrollmentsApi';
+export * from './companyContactsApi';
+export * from './messageTemplatesApi';
 export { default as apiClient, getApiErrorMessage } from './client';

@@ -9,10 +9,28 @@ from .views import (
     ResetPasswordViewSet,
     LogoutViewSet,
     UserPreferencesViewSet,
+    ContactViewSet,
+    TemplateViewSet,
+    CampaignViewSet,
+    MessageViewSet,
+    CourseViewSet,
+    CompanyViewSet,
+    StudentEnrollmentViewSet,
+    CompanyContactViewSet,
+    MessageTemplateViewSet,
 )
 
 router = DefaultRouter()
 router.register('users', UserPreferencesViewSet, basename='users')
+router.register('contacts', ContactViewSet, basename='contacts')
+router.register('templates', TemplateViewSet, basename='templates')
+router.register('campaigns', CampaignViewSet, basename='campaigns')
+router.register('messages', MessageViewSet, basename='messages')
+router.register('courses', CourseViewSet, basename='courses')
+router.register('companies', CompanyViewSet, basename='companies')
+router.register('enrollments', StudentEnrollmentViewSet, basename='enrollments')
+router.register('company-contacts', CompanyContactViewSet, basename='company-contacts')
+router.register('message-templates', MessageTemplateViewSet, basename='message-templates')
 
 urlpatterns = [
     path('auth/login/', LoginViewSet.as_view({'post': 'create'}), name='auth-login'),

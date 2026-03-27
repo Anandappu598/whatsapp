@@ -1,39 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { getContacts, createContact, getApiErrorMessage } from '../api';
+import Toast from '../components/Toast';
 
 const ContactsView = () => {
-    // Stateful contact list
-    const [contacts, setContacts] = useState([
-        {
-            id: 1,
-            name: 'Michael Chen',
-            phone: '917676083350',
-            category: 'B2C',
-            createdDate: 'Mar-18-2026',
-            attributes: { language: 'en', name: 'Michael Chen', phone: '917676083350' },
-            broadcast: true,
-            sms: true
-        },
-        {
-            id: 2,
-            name: 'Sarah Jenkins',
-            phone: '12025550192',
-            category: 'B2B',
-            createdDate: 'Mar-17-2026',
-            attributes: { language: 'en', name: 'Sarah Jenkins', phone: '12025550192' },
-            broadcast: true,
-            sms: true
-        },
-        {
-            id: 3,
-            name: 'Logistics Pro Inc.',
-            phone: '18005550101',
-            category: 'B2B',
-            createdDate: 'Mar-16-2026',
-            attributes: { language: 'en', name: 'Logistics Pro Inc.', phone: '18005550101' },
-            broadcast: false,
-            sms: true
-        }
-    ]);
+    // Stateful contact list from API
+    const [contacts, setContacts] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [toast, setToast] = useState(null);
 
     // Modal State
     const [showAddModal, setShowAddModal] = useState(false);
@@ -41,38 +15,84 @@ const ContactsView = () => {
     const [newPhone, setNewPhone] = useState('');
     const [newCategory, setNewCategory] = useState('B2C');
 
-    const handleAddContact = () => {
-        if (!newName.trim() || !newPhone.trim()) {
-            alert("Both Name and Phone Number are required.");
-            return;
-        }
-
-        // Duplicate check
-        const exists = contacts.some(c => c.phone === newPhone.trim());
-        if (exists) {
-            alert("Contact with this phone number already exists.");
-            return;
-        }
-
-        const newContact = {
-            id: Date.now(),
-            name: newName.trim(),
-            phone: newPhone.trim(),
-            category: newCategory,
-            createdDate: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).replace(/ /g, '-'),
-            attributes: { language: 'en', name: newName.trim(), phone: newPhone.trim() },
-            broadcast: true,
-            sms: true
+    // Fetch contacts from backend
+    useEffect(() => {
+        const loadContacts = async () => {
+            try {
+                setLoading(true);
+                const data = await getContacts();
+                setContacts(data);
+                setError(null);
+            } catch (err) {
+                const errorMsg = getApiErrorMessage(err, 'Failed to load contacts');
+                setError(errorMsg);
+                setToast({ type: 'error', message: errorMsg });
+            } finally {
+                setLoading(false);
+            }
         };
+        loadContacts();
+    }, []);
 
-        setContacts([newContact, ...contacts]);
-        setShowAddModal(false);
-        setNewName('');
-        setNewPhone('');
+    const handleAddContact = async () => {
+        if (!newName.trim() || !newPhone.trim()) {
+            setToast({ type: 'error', message: 'Both Name and Phone Number are required.' });
+            return;
+        }
+
+        // Check for duplicates locally
+        const exists = contacts.some(c => c.phone_number === newPhone.trim());
+        if (exists) {
+            setToast({ type: 'error', message: 'Contact with this phone number already exists.' });
+            return;
+        }
+
+        try {
+            const newContact = {
+                name: newName.trim(),
+                phone_number: newPhone.trim(),
+                category: newCategory,
+                language: 'en',
+                attributes: { language: 'en', name: newName.trim(), phone: newPhone.trim() },
+                broadcast: true,
+                sms: true
+            };
+
+            const createdContact = await createContact(newContact);
+            setContacts([createdContact, ...contacts]);
+            setShowAddModal(false);
+            setNewName('');
+            setNewPhone('');
+            setToast({ type: 'success', message: 'Contact added successfully!' });
+        } catch (err) {
+            const errorMsg = getApiErrorMessage(err, 'Failed to add contact');
+            setToast({ type: 'error', message: errorMsg });
+        }
     };
 
     return (
         <div style={{ padding: '24px', background: 'var(--surface-white)', borderRadius: '24px', minHeight: '100%', position: 'relative' }}>
+            {/* Toast Notification */}
+            {toast && (
+                <Toast 
+                    message={toast.message} 
+                    type={toast.type}
+                    onClose={() => setToast(null)}
+                />
+            )}
+
+            {/* Loading State */}
+            {loading ? (
+                <div style={{ textAlign: 'center', padding: '60px 24px' }}>
+                    <h3>Loading contacts...</h3>
+                </div>
+            ) : error ? (
+                <div style={{ textAlign: 'center', padding: '60px 24px', color: 'var(--text-error)' }}>
+                    <h3>Error loading contacts</h3>
+                    <p>{error}</p>
+                </div>
+            ) : (
+            <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
                 <div>
                     <h2 style={{ fontSize: '24px', fontWeight: '800', margin: 0 }}>Contacts</h2>
@@ -136,7 +156,7 @@ const ContactsView = () => {
                         {/* Basic Info */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                             <span style={{ fontWeight: '700', color: 'var(--text-dark)' }}>{contact.name}</span>
-                            <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>{contact.phone}</span>
+                            <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>{contact.phone_number}</span>
                         </div>
 
                         {/* Contact Attributes */}
@@ -163,7 +183,7 @@ const ContactsView = () => {
 
                         {/* Created Date */}
                         <div style={{ color: 'var(--text-muted)', fontWeight: '600' }}>
-                            {contact.createdDate}
+                            {new Date(contact.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).replace(/ /g, '-')}
                         </div>
 
                         {/* Category */}
@@ -304,6 +324,8 @@ const ContactsView = () => {
                         </button>
                     </div>
                 </div>
+            )}
+            </>
             )}
         </div>
     );

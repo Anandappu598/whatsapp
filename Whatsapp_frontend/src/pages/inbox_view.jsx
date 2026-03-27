@@ -1,113 +1,98 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import '../styles/inbox_view.css';
+import { getContacts, getContactMessages, createMessage, getApiErrorMessage } from '../api';
+import Toast from '../components/Toast';
 
 const InboxView = () => {
-    // Dummy data for the chat list
-    const [chats, setChats] = useState([
-        {
-            id: 1,
-            name: 'Michael Chen',
-            phone: '917676083350',
-            avatar: 'MC',
-            lastMessage: 'Thanks, the front-end course looks great!',
-            time: '10:42 AM',
-            unread: 2,
-            messages: [
-                { id: 101, text: 'Hi! I just purchased the beginner UI/UX bundle.', sender: 'received', time: '10:30 AM' },
-                { id: 102, text: 'Hello Michael! Thank you for your purchase. You can access it from your dashboard.', sender: 'sent', time: '10:35 AM' },
-                { id: 103, text: 'Thanks, the front-end course looks great!', sender: 'received', time: '10:42 AM' }
-            ]
-        },
-        {
-            id: 2,
-            name: 'Sarah Jenkins',
-            phone: '12025550192',
-            avatar: 'SJ',
-            lastMessage: 'Can we reschedule the B2B onboarding?',
-            time: '09:15 AM',
-            unread: 0,
-            messages: [
-                { id: 201, text: 'Hi team, is it possible to push our meeting to Thursday?', sender: 'received', time: '09:10 AM' },
-                { id: 202, text: 'Can we reschedule the B2B onboarding?', sender: 'received', time: '09:15 AM' }
-            ]
-        },
-        {
-            id: 3,
-            name: 'Logistics Pro Inc.',
-            phone: '18005550101',
-            avatar: 'LP',
-            lastMessage: 'The new API credentials work perfectly.',
-            time: 'Yesterday',
-            unread: 0,
-            messages: [
-                { id: 301, text: 'Here are your updated webhook keys.', sender: 'sent', time: 'Yesterday 4:00 PM' },
-                { id: 302, text: 'The new API credentials work perfectly.', sender: 'received', time: 'Yesterday 4:45 PM' }
-            ]
-        }
-    ]);
-
-    const [activeChatId, setActiveChatId] = useState(chats[0].id);
+    // State for contacts and messages from API
+    const [contacts, setContacts] = useState([]);
+    const [messages, setMessages] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [toast, setToast] = useState(null);
+    const [activeChatId, setActiveChatId] = useState(null);
     const [inputText, setInputText] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [showContactPanel, setShowContactPanel] = useState(false);
-    const [showAddContact, setShowAddContact] = useState(false);
-    const [newContactName, setNewContactName] = useState('');
-    const [newContactPhone, setNewContactPhone] = useState('');
-    const [newContactCategory, setNewContactCategory] = useState('B2B');
     const fileInputRef = useRef(null);
 
-    // Find the currently selected chat object
-    const activeChat = chats.find(c => c.id === activeChatId) || chats[0];
-
-    const handleSendMessage = () => {
-        if (!inputText.trim()) return;
-
-        const newMessage = {
-            id: Date.now(),
-            text: inputText,
-            sender: 'sent',
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-
-        const updatedChats = chats.map(chat => {
-            if (chat.id === activeChatId) {
-                return {
-                    ...chat,
-                    lastMessage: inputText,
-                    messages: [...chat.messages, newMessage]
-                };
+    // Fetch contacts on component mount
+    useEffect(() => {
+        const loadContacts = async () => {
+            try {
+                setLoading(true);
+                const contactsData = await getContacts();
+                setContacts(contactsData);
+                if (contactsData.length > 0) {
+                    setActiveChatId(contactsData[0].id);
+                    // Load messages for first contact
+                    const messagesData = await getContactMessages(contactsData[0].id);
+                    setMessages(messagesData);
+                }
+                setError(null);
+            } catch (err) {
+                const errorMsg = getApiErrorMessage(err, 'Failed to load contacts');
+                setError(errorMsg);
+                setToast({ type: 'error', message: errorMsg });
+            } finally {
+                setLoading(false);
             }
-            return chat;
-        });
+        };
+        loadContacts();
+    }, []);
 
-        setChats(updatedChats);
-        setInputText('');
+    // Load messages when active chat changes
+    useEffect(() => {
+        if (activeChatId) {
+            const loadMessages = async () => {
+                try {
+                    const messagesData = await getContactMessages(activeChatId);
+                    setMessages(messagesData);
+                } catch (err) {
+                    const errorMsg = getApiErrorMessage(err, 'Failed to load messages');
+                    setToast({ type: 'error', message: errorMsg });
+                }
+            };
+            loadMessages();
+        }
+    }, [activeChatId]);
 
-        // Optional: Simulate a response
-        setTimeout(() => {
-            const responseMessage = {
-                id: Date.now() + 1,
-                text: "Thanks for your message! Our team will get back to you shortly.",
-                sender: 'received',
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    // Find the currently selected chat object
+    const activeChat = contacts.find(c => c.id === activeChatId) || contacts[0];
+
+    const handleSendMessage = async () => {
+        if (!inputText.trim() || !activeChatId) return;
+
+        try {
+            const newMessagePayload = {
+                contact: activeChatId,
+                text: inputText,
+                sender: 'sent'
             };
 
-            setChats(prevChats => prevChats.map(chat => {
-                if (chat.id === activeChatId) {
-                    return {
-                        ...chat,
-                        lastMessage: responseMessage.text,
-                        messages: [...chat.messages, responseMessage]
-                    };
-                }
-                return chat;
-            }));
-        }, 1500);
+            await createMessage(newMessagePayload);
+            
+            // Add message to local state for immediate UI update
+            const newMessage = {
+                id: Date.now(),
+                text: inputText,
+                sender: 'sent',
+                contact: activeChatId,
+                created_at: new Date().toISOString()
+            };
+            
+            setMessages([...messages, newMessage]);
+            setInputText('');
+            setToast({ type: 'success', message: 'Message sent!' });
+        } catch (err) {
+            const errorMsg = getApiErrorMessage(err, 'Failed to send message');
+            setToast({ type: 'error', message: errorMsg });
+        }
     };
 
-    const filteredChats = chats.filter(chat =>
-        chat.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        chat.lastMessage.toLowerCase().includes(searchTerm.toLowerCase())
+    const filteredContacts = contacts.filter(contact =>
+        contact.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        contact.phone_number.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const handleAttachClick = () => {
@@ -123,41 +108,29 @@ const InboxView = () => {
         }
     };
 
-    const handleAddContact = (e) => {
-        e.preventDefault();
-        if (!newContactName.trim() || !newContactPhone.trim()) {
-            alert('Please fill in all fields');
-            return;
-        }
-
-        // Check for duplicates based on phone number
-        const duplicate = chats.find(c => c.phone === newContactPhone);
-        if (duplicate) {
-            alert('Contact already exists with this phone number!');
-            return;
-        }
-
-        const newChat = {
-            id: Date.now(),
-            name: newContactName,
-            phone: newContactPhone,
-            category: newContactCategory,
-            avatar: newContactName.substring(0, 2).toUpperCase(),
-            lastMessage: 'New contact added',
-            time: 'Just now',
-            unread: 0,
-            messages: []
-        };
-
-        setChats([newChat, ...chats]);
-        setNewContactName('');
-        setNewContactPhone('');
-        setNewContactCategory('B2B');
-        setShowAddContact(false);
-    };
-
     return (
         <div className="inbox-wrapper" style={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column' }}>
+            {/* Toast Notification */}
+            {toast && (
+                <Toast 
+                    message={toast.message} 
+                    type={toast.type}
+                    onClose={() => setToast(null)}
+                />
+            )}
+
+            {/* Loading State */}
+            {loading ? (
+                <div style={{ textAlign: 'center', padding: '60px 24px' }}>
+                    <h3>Loading inbox...</h3>
+                </div>
+            ) : error ? (
+                <div style={{ textAlign: 'center', padding: '60px 24px', color: 'var(--text-error)' }}>
+                    <h3>Error loading inbox</h3>
+                    <p>{error}</p>
+                </div>
+            ) : (
+            <>
 
             {/* Header */}
             <div style={{ marginBottom: '24px' }}>
@@ -193,23 +166,22 @@ const InboxView = () => {
                     </div>
 
                     <div className="chat-list-container">
-                        {filteredChats.map(chat => (
+                        {filteredContacts.map(contact => (
                             <div
-                                key={chat.id}
-                                className={`chat-list-item ${activeChatId === chat.id ? 'active' : ''}`}
+                                key={contact.id}
+                                className={`chat-list-item ${activeChatId === contact.id ? 'active' : ''}`}
                                 onClick={() => {
-                                    setActiveChatId(chat.id);
+                                    setActiveChatId(contact.id);
                                 }}
                             >
-                                <div className="chat-item-avatar">{chat.avatar}</div>
+                                <div className="chat-item-avatar">{contact.name.substring(0, 2).toUpperCase()}</div>
                                 <div className="chat-item-details">
                                     <div className="chat-item-header">
-                                        <span className="chat-item-name">{chat.name}</span>
-                                        <span className="chat-item-time">{chat.time}</span>
+                                        <span className="chat-item-name">{contact.name}</span>
+                                        <span className="chat-item-time">{new Date(contact.created_at).toLocaleDateString()}</span>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center' }}>
-                                        <span className="chat-item-preview">{chat.lastMessage}</span>
-                                        {chat.unread > 0 && <span className="unread-badge">{chat.unread}</span>}
+                                        <span className="chat-item-preview">{contact.phone_number}</span>
                                     </div>
                                 </div>
                             </div>
@@ -224,9 +196,9 @@ const InboxView = () => {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                             {/* Profile Info (Clickable to open panel) */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', marginRight: '20px' }} onClick={() => setShowContactPanel(!showContactPanel)}>
-                                <div className="chat-item-avatar" style={{ width: '40px', height: '40px' }}>{activeChat.avatar}</div>
+                                <div className="chat-item-avatar" style={{ width: '40px', height: '40px' }}>{activeChat?.name?.substring(0, 2).toUpperCase()}</div>
                                 <div>
-                                    <div style={{ fontWeight: '800', fontSize: '15px', color: 'var(--text-dark)' }}>{activeChat.name}</div>
+                                    <div style={{ fontWeight: '800', fontSize: '15px', color: 'var(--text-dark)' }}>{activeChat?.name}</div>
                                     <div style={{ fontSize: '12px', color: '#10B981', fontWeight: '600' }}>● Online</div>
                                 </div>
                             </div>
@@ -266,12 +238,12 @@ const InboxView = () => {
 
                     {/* Chat History */}
                     <div className="chat-history">
-                        {activeChat.messages.map(msg => (
+                        {messages.map(msg => (
                             <div key={msg.id} className={`message-wrapper ${msg.sender}`}>
                                 <div className="message-bubble">
                                     {msg.text}
                                 </div>
-                                <div className="message-time">{msg.time}</div>
+                                <div className="message-time">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                             </div>
                         ))}
                     </div>
@@ -436,6 +408,8 @@ const InboxView = () => {
                     </div>
                 )}
             </div>
+            </>
+            )}
         </div>
     );
 };
